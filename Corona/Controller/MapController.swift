@@ -12,11 +12,11 @@ import MapKit
 import FloatingPanel
 
 class MapController: UIViewController {
-	private static let cityZoomLevel = (UIScreen.main.bounds.width > 1000) ? CGFloat(5) : CGFloat(4)
 	private static let updateInterval: TimeInterval = 60 * 5 /// 5 mins
 
 	static var instance: MapController!
 
+	private var cityZoomLevel: CGFloat { (view.bounds.width > 1000) ? 5 : 4 }
 	private var allAnnotations: [RegionAnnotation] = []
 	private var countryAnnotations: [RegionAnnotation] = []
 	private var currentAnnotations: [RegionAnnotation] = []
@@ -123,10 +123,6 @@ class MapController: UIViewController {
 		panelController.move(to: .full, animated: true)
 	}
 
-	func hideRegionScreen() {
-		panelController.move(to: .half, animated: true)
-	}
-
 	func showRegionOnMap(region: Region) {
 		let spanDelta = region.subRegions.isEmpty ? 12.0 : 60.0
 		let coordinateRegion = MKCoordinateRegion(center: region.location.clLocation,
@@ -159,9 +155,9 @@ class MapController: UIViewController {
 			.filter({ $0.report?.stat.number(for: mode) ?? 0 > 0 })
 			.map({ RegionAnnotation(region: $0, mode: mode) })
 
-		currentAnnotations = mapView.zoomLevel > Self.cityZoomLevel ? allAnnotations : countryAnnotations
+		currentAnnotations = mapView.zoomLevel > cityZoomLevel ? allAnnotations : countryAnnotations
 
-		view.transition {
+		mapView.superview?.transition {
 			self.mapView.removeAnnotations(self.mapView.annotations)
 			self.mapView.addAnnotations(self.currentAnnotations)
 		}
@@ -227,18 +223,18 @@ class MapController: UIViewController {
 
 	@IBAction func buttonModeTapped(_ sender: Any) {
 		Menu.show(above: self, sourceView: buttonMode, width: 150, items: [
-			MenuItem(title: L10n.Case.confirmed, image: nil, selected: mode == .confirmed, action: {
+			.option(title: L10n.Case.confirmed, selected: mode == .confirmed) {
 				self.mode = .confirmed
-			}),
-			MenuItem(title: L10n.Case.active, image: nil, selected: mode == .active, action: {
+			},
+			.option(title: L10n.Case.active, selected: mode == .active) {
 				self.mode = .active
-			}),
-			MenuItem(title: L10n.Case.recovered, image: nil, selected: mode == .recovered, action: {
+			},
+			.option(title: L10n.Case.recovered, selected: mode == .recovered) {
 				self.mode = .recovered
-			}),
-			MenuItem(title: L10n.Case.deaths, image: nil, selected: mode == .deaths, action: {
+			},
+			.option(title: L10n.Case.deaths, selected: mode == .deaths) {
 				self.mode = .deaths
-			}),
+			},
 		])
 	}
 }
@@ -279,9 +275,9 @@ extension MapController: MKMapViewDelegate {
 	func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
 		var annotationToSelect: MKAnnotation? = nil
 
-		if mapView.zoomLevel > Self.cityZoomLevel {
+		if mapView.zoomLevel > cityZoomLevel {
 			if currentAnnotations.count != allAnnotations.count {
-				view.transition {
+				mapView.superview?.transition {
 					annotationToSelect = mapView.selectedAnnotations.first
 					mapView.removeAnnotations(mapView.annotations)
 					self.currentAnnotations = self.allAnnotations
@@ -291,7 +287,7 @@ extension MapController: MKMapViewDelegate {
 		}
 		else {
 			if currentAnnotations.count != countryAnnotations.count {
-				view.transition {
+				mapView.superview?.transition {
 					annotationToSelect = mapView.selectedAnnotations.first
 					mapView.removeAnnotations(mapView.annotations)
 					self.currentAnnotations = self.countryAnnotations
@@ -333,7 +329,11 @@ extension MapController: FloatingPanelControllerDelegate {
 
 class PanelLayout: FloatingPanelLayout {
 	public var initialPosition: FloatingPanelPosition {
-		return .half
+		#if targetEnvironment(macCatalyst)
+		return .full
+		#else
+		return UIDevice.current.userInterfaceIdiom == .pad ? .full : .half
+		#endif
 	}
 
 	public func insetFor(position: FloatingPanelPosition) -> CGFloat? {
